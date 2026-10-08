@@ -86,13 +86,15 @@
   .slot.has { border-style: solid; border-color: var(--line); }
   .slot img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
   .slot img.cover { object-fit: cover; }
+  .slot .adds { display: flex; gap: 6px; padding: 8px; }
+  .slot.yarim .adds .add { padding: 10px 12px; }
   .slot .add { display: flex; flex-direction: column; align-items: center; gap: 6px; color: var(--gold); font-size: 14px; font-weight: 600; background: none; border: 0; font-family: inherit; padding: 20px; }
   .slot .add svg { width: 30px; height: 30px; }
   .slot .tools {
     position: absolute; left: 6px; right: 6px; bottom: 6px; display: flex; gap: 6px; justify-content: center;
   }
   .slot .tools button {
-    border: 0; border-radius: 8px; padding: 7px 9px; font: inherit; font-size: 12px;
+    border: 0; border-radius: 8px; padding: 7px 7px; font: inherit; font-size: 12px;
     background: rgba(14,31,56,.85); color: #fff;
   }
   .slot .tools button.del { background: rgba(180,35,24,.9); }
@@ -447,6 +449,8 @@ async function shrinkPhoto(file) {
 
 const CAM_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-2.5h6L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg>';
 
+const GAL_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M20.5 16l-5-5-8.5 8.5"/></svg>';
+
 function slotKeys(n) {
   return state.modes[n] === "tek" ? [String(n)] : [n + "a", n + "b"];
 }
@@ -481,11 +485,20 @@ function renderSlot(key, tek) {
   const el = document.createElement("div");
   const p = state.photos[key];
   el.className = `slot ${tek ? "tek" : "yarim"} ${p ? "has" : ""}`;
-  const input = document.createElement("input");
-  input.type = "file";
-  input.accept = "image/*";
-  input.onchange = async () => {
-    const file = input.files && input.files[0];
+  // Iki ayri input: biri capture ile direkt arka kamerayi aciyor,
+  // digeri iPhone'un normal menusunu (galeri / foto cek / dosya) gosteriyor
+  const makeInput = (camera) => {
+    const i = document.createElement("input");
+    i.type = "file";
+    i.accept = "image/*";
+    if (camera) i.setAttribute("capture", "environment");
+    i.onchange = () => handleFile(i);
+    el.appendChild(i);
+    return i;
+  };
+  const handleFile = async (inp) => {
+    const file = inp.files && inp.files[0];
+    inp.value = "";
     if (!file) return;
     toast("Fotoğraf hazırlanıyor...");
     try {
@@ -496,15 +509,21 @@ function renderSlot(key, tek) {
       toast("Bu fotoğraf açılamadı, başka bir tane dener misin?");
     }
   };
-  el.appendChild(input);
+  const camInput = makeInput(true);
+  const galInput = makeInput(false);
 
   if (!p) {
-    const b = document.createElement("button");
-    b.type = "button";
-    b.className = "add";
-    b.innerHTML = CAM_ICON + "Fotoğraf ekle";
-    b.onclick = () => input.click();
-    el.appendChild(b);
+    const wrap = document.createElement("div");
+    wrap.className = "adds";
+    wrap.innerHTML = `
+      <button type="button" class="add" data-a="cam">${CAM_ICON}Kamera</button>
+      <button type="button" class="add" data-a="gal">${GAL_ICON}Galeri</button>`;
+    wrap.onclick = (e) => {
+      const b = e.target.closest("[data-a]");
+      if (!b) return;
+      (b.dataset.a === "cam" ? camInput : galInput).click();
+    };
+    el.appendChild(wrap);
     return el;
   }
 
@@ -516,11 +535,13 @@ function renderSlot(key, tek) {
   tools.className = "tools";
   tools.innerHTML = `
     <button type="button" data-a="fit">${p.fit === "cover" ? "Sığdır" : "Doldur"}</button>
-    <button type="button" data-a="change">Değiştir</button>
+    <button type="button" data-a="cam">Kamera</button>
+    <button type="button" data-a="gal">Galeri</button>
     <button type="button" data-a="del" class="del">Sil</button>`;
   tools.onclick = (e) => {
     const a = e.target.dataset.a;
-    if (a === "change") input.click();
+    if (a === "cam") camInput.click();
+    if (a === "gal") galInput.click();
     if (a === "fit") setPhoto(key, p.blob, p.fit === "cover" ? "contain" : "cover");
     if (a === "del") removePhoto(key);
   };
